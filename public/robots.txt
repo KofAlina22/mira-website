@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://ai-mira.tech/sitemap.xml
+
+# Block access to private assets
+Disallow: /src/
+Disallow: /__figma__/
+Disallow: /api/
+
+# Allow major crawlers full access
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
