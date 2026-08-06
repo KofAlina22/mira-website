@@ -38,7 +38,7 @@ A record is written only after the visitor selects **Yes, notify me**. Entering 
 ```dotenv
 SUPABASE_URL=https://PROJECT_REF.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-secret
-EARLY_ACCESS_ALLOWED_ORIGIN=https://your-production-domain.example
+EARLY_ACCESS_ALLOWED_ORIGIN=https://ai-mira.tech
 ```
 
 Never prefix the service-role key with `VITE_`. In Cloudflare Pages, add `SUPABASE_SERVICE_ROLE_KEY` as an encrypted secret under **Settings -> Variables and Secrets**. Add the URL and allowed origin as production variables. Configure Preview values separately if previews should accept submissions from a preview domain.

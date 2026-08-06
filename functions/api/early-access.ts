@@ -23,6 +23,7 @@ type RequestBody = {
 };
 
 const MAX_BODY_BYTES = 8192;
+const PRODUCTION_ORIGIN = "https://ai-mira.tech";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SOURCES = new Set([
   "header",
@@ -76,14 +77,16 @@ function getAttribution(body: RequestBody, request: Request) {
 
 export async function onRequest(context: PagesContext): Promise<Response> {
   const { request, env } = context;
-  const allowedOrigin = env.EARLY_ACCESS_ALLOWED_ORIGIN?.replace(/\/$/, "");
+  const configuredOrigin = env.EARLY_ACCESS_ALLOWED_ORIGIN?.replace(/\/$/, "");
   const requestOrigin = request.headers.get("Origin")?.replace(/\/$/, "");
-  const development = isLocalOrigin(requestOrigin) && isLocalOrigin(allowedOrigin);
+  const allowedOrigins = new Set([PRODUCTION_ORIGIN, configuredOrigin].filter((origin): origin is string => Boolean(origin)));
+  const allowedOrigin = requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : configuredOrigin ?? PRODUCTION_ORIGIN;
+  const development = isLocalOrigin(requestOrigin) && isLocalOrigin(configuredOrigin);
 
   if (request.method !== "POST") {
     return json({ ok: false, code: "METHOD_NOT_ALLOWED", message: "Method not allowed." }, 405, allowedOrigin);
   }
-  if (allowedOrigin && requestOrigin !== allowedOrigin) {
+  if (!requestOrigin || !allowedOrigins.has(requestOrigin)) {
     return json({ ok: false, code: "ORIGIN_NOT_ALLOWED", message: "Request origin is not allowed." }, 403, allowedOrigin);
   }
   if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) {
