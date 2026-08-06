@@ -75,3 +75,6 @@
 @media(max-width:520px){.early-access-backdrop{align-items:end;padding:16px}.early-access-dialog{width:100%;padding:31px 22px 24px;border-radius:17px}.early-access-dialog h2{font-size:26px}.early-access-actions{align-items:stretch;flex-direction:column}.early-access-actions .button{width:100%;min-height:45px}.early-access-close{top:12px;right:12px}}
 @media(prefers-reduced-motion:reduce){.early-access-backdrop,.early-access-dialog{animation:none}}
 .early-access-dialog .early-access-error{display:block}
+
+/* Compact footer */
+@media(min-width:801px){.site-footer{height:52px;padding:4px 0;gap:18px;align-items:center}.footer-brand{gap:6px}.footer-brand .footer-brand-icon{width:20px;height:20px;flex-basis:20px}.footer-brand .footer-brand-wordmark{width:66px}.site-footer>nav{gap:12px;font-size:12px}.site-footer>span{font-size:9px}}
