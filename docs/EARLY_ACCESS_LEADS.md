@@ -124,6 +124,21 @@ order by created_at desc;
 
 In the Table Editor, apply the filters above and use **Export data -> CSV**. For automation later, query from a trusted server-side job with the service role; never expose the service role in browser code.
 
+## Design Partner CRM
+
+Apply `supabase/migrations/202608060001_design_partner_crm.sql`, then create the authorised dashboard users in Supabase Authentication. The protected dashboard is available at `/admin/leads`.
+
+Configure these server-side Cloudflare Pages variables/secrets:
+
+- `ADMIN_EMAILS`: comma-separated email allowlist for dashboard access
+- `RESEND_API_KEY`: Resend API key for lead notifications
+- `LEAD_NOTIFICATION_EMAIL`: notification recipient
+- `LEAD_NOTIFICATION_FROM`: optional verified sender, for example `MIRA Leads <leads@ai-mira.tech>`
+- `TELEGRAM_BOT_TOKEN`: optional Telegram bot token
+- `TELEGRAM_CHAT_ID`: optional Telegram destination chat ID
+
+`SUPABASE_SERVICE_ROLE_KEY` must remain a server-side secret. Never create a `VITE_`-prefixed copy. Email and Telegram delivery run after the database write; a provider outage is logged without losing the registration.
+
 ## Remove a lead on request
 
 Use the Supabase SQL Editor or another authenticated administrative workflow:

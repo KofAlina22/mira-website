@@ -8,12 +8,18 @@ import { ProductPreview } from "./sections/ProductPreview";
 import { HowItWorks } from "./sections/HowItWorks";
 import { FinalCTA } from "./sections/FinalCTA";
 import { EarlyAccessModal, openEarlyAccess } from "./components/early-access/EarlyAccessModal";
+import { LeadsDashboard } from "./admin/LeadsDashboard";
+import { useOverflowAudit } from "./hooks/useOverflowAudit";
 
 export default function App() {
+  const isAdmin = window.location.pathname.replace(/\/$/, "") === "/admin/leads";
+  useOverflowAudit(isAdmin);
   useEffect(() => {
     document.title = "MIRA — Know what people actually understand";
     document.documentElement.lang = "en";
   }, []);
+
+  if (isAdmin) return <LeadsDashboard />;
 
   return (
     <div className="site-shell">

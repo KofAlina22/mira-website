@@ -2,6 +2,11 @@ interface Env {
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   EARLY_ACCESS_ALLOWED_ORIGIN?: string;
+  RESEND_API_KEY?: string;
+  LEAD_NOTIFICATION_EMAIL?: string;
+  LEAD_NOTIFICATION_FROM?: string;
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
 }
 
 interface PagesContext {
@@ -20,6 +25,12 @@ type RequestBody = {
   utm_campaign?: unknown;
   referrer?: unknown;
   company_website?: unknown;
+};
+
+type LeadRecord = {
+  id: string; email: string; created_at: string; country: string | null;
+  device: string; utm_source: string | null; utm_medium: string | null;
+  utm_campaign: string | null; referrer: string | null;
 };
 
 const MAX_BODY_BYTES = 8192;
@@ -73,6 +84,36 @@ function getAttribution(body: RequestBody, request: Request) {
     referrer,
     user_agent: clean(request.headers.get("User-Agent"), 512),
   };
+}
+
+function deviceFromUserAgent(value: string | null): string {
+  if (!value) return "Unknown";
+  if (/ipad|tablet|playbook|silk/i.test(value)) return "Tablet";
+  if (/mobile|iphone|ipod|android/i.test(value)) return "Mobile";
+  return "Desktop";
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]!));
+}
+
+async function sendNotifications(env: Env, lead: LeadRecord): Promise<void> {
+  const fields = [
+    ["Email", lead.email], ["Time", `${lead.created_at.replace("T", " ").replace(/:\d\d\.\d+Z$/, "")} UTC`],
+    ["Country", lead.country ?? "Unknown"], ["Device", lead.device], ["Source", lead.utm_source ?? "Direct"],
+    ["Medium", lead.utm_medium ?? "—"], ["Campaign", lead.utm_campaign ?? "—"], ["Referrer", lead.referrer ?? "Direct"],
+  ];
+  const jobs: Promise<unknown>[] = [];
+  if (env.RESEND_API_KEY && env.LEAD_NOTIFICATION_EMAIL) {
+    const rows = fields.map(([label, value]) => `<tr><td style="padding:7px 18px 7px 0;color:#777">${label}</td><td style="padding:7px 0;color:#111">${escapeHtml(value)}</td></tr>`).join("");
+    jobs.push(fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: env.LEAD_NOTIFICATION_FROM ?? "MIRA Leads <leads@ai-mira.tech>", to: [env.LEAD_NOTIFICATION_EMAIL], subject: `New Design Partner Lead — ${lead.email}`, html: `<div style="font-family:Inter,Arial,sans-serif;max-width:640px;padding:28px"><h1 style="font-size:22px">New Design Partner Lead</h1><table>${rows}</table></div>` }) }).then(async (response) => { if (!response.ok) throw new Error(`Resend ${response.status}: ${await response.text()}`); }));
+  }
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+    const text = ["<b>New Design Partner Lead</b>", ...fields.map(([label, value]) => `\n<b>${escapeHtml(label)}:</b>\n${escapeHtml(value)}`)].join("\n");
+    jobs.push(fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text, parse_mode: "HTML", disable_web_page_preview: true }) }).then(async (response) => { if (!response.ok) throw new Error(`Telegram ${response.status}: ${await response.text()}`); }));
+  }
+  const results = await Promise.allSettled(jobs);
+  results.forEach((result) => { if (result.status === "rejected") console.error("[MIRA] Lead notification failed.", result.reason); });
 }
 
 export async function onRequest(context: PagesContext): Promise<Response> {
@@ -139,6 +180,8 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   const requestedSource = clean(body.source, 80)?.replace(/-/g, "_") ?? "unknown";
   const source = SOURCES.has(requestedSource) ? requestedSource : "unknown";
   const attribution = getAttribution(body, request);
+  const country = clean(request.headers.get("CF-IPCountry"), 2);
+  const device = deviceFromUserAgent(attribution.user_agent);
 
   try {
     const response = await fetch(`${supabaseUrl}/rest/v1/early_access_leads?on_conflict=normalized_email`, {
@@ -147,13 +190,15 @@ export async function onRequest(context: PagesContext): Promise<Response> {
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,
         "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=minimal",
+        Prefer: "resolution=merge-duplicates,return=representation",
       },
       body: JSON.stringify({
         email,
         normalized_email: normalizedEmail,
         early_access_consent: true,
         source,
+        country,
+        device,
         ...attribution,
       }),
     });
@@ -163,6 +208,9 @@ export async function onRequest(context: PagesContext): Promise<Response> {
       console.error("[MIRA] Early-access storage request failed.", development ? { supabaseStatus: response.status, supabaseResponseBody: supabaseBody } : { status: response.status });
       return json({ ok: false, code: "STORAGE_ERROR", message: "We couldn’t save your request. Please try again.", ...(development ? { debug: { reason: "SUPABASE_ERROR", status: response.status, responseBody: supabaseBody } } : {}) }, 502, allowedOrigin);
     }
+    const records = await response.json() as LeadRecord[];
+    const lead = records[0];
+    if (lead) await sendNotifications(env, lead);
     return json({ ok: true }, 200, allowedOrigin);
   } catch (error) {
     const detail = error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) };
